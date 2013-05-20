@@ -688,6 +688,9 @@ class Gdn_Format {
                array('\'<code\'.RemoveQuoteSlashes(\'\1\').\'>\'.htmlspecialchars(RemoveQuoteSlashes(\'\2\')).\'</code>\''),
                $Mixed
             );
+            
+            // Do HTML filtering before our special changes
+            $Mixed = $Formatter->Format($Mixed);
 
             // Links
             $Mixed = Gdn_Format::Links($Mixed);
@@ -699,8 +702,8 @@ class Gdn_Format {
                $Mixed = preg_replace("/(\015\012)|(\015)|(\012)/", "<br />", $Mixed);
 //               $Mixed = wpautop($Mixed);
             }
-
-            $Result = $Formatter->Format($Mixed);
+            
+            $Result = $Mixed;            
 
 //            $Result = $Result.
 //               "<h3>Html</h3><pre>".nl2br(htmlspecialchars(str_replace("<br />", "\n", $Mixed)))."</pre>".
@@ -795,6 +798,29 @@ class Gdn_Format {
 
          return $Mixed;
       }
+   }
+   
+   /**
+    * Strips out most YouTube embed/iframe and replaces with text URL.
+    * 
+    * This allows later parsing to insert a sanitized video video embed normally.
+    * Necessary for backwards compatibility from when we allowed embed & object tags.
+    * 
+    * This is not an HTML filter; it enables old YouTube videos to theoretically work,
+    * it doesn't effectively block YouTube iframes or objects.
+    * 
+    * @param mixed $Mixed
+    * @return HTML string
+    */
+   public static function UnembedVideos($Mixed) {
+      if (!is_string($Mixed))
+         return self::To($Mixed, 'UnembedVideos');
+      elseif (C('Garden.Format.YouTube')) {
+         $Mixed = preg_replace('`<iframe.*src="((https?)://.*youtube\.com/embed/([a-z0-9_-]*))".*</iframe>`i', "\n$2://www.youtube.com/watch?v=$3\n", $Mixed);
+         $Mixed = preg_replace('`<object.*value="((https?)://.*youtube\.com/v/([a-z0-9_-]*)[^"]*)".*</object>`i', "\n$2://www.youtube.com/watch?v=$3\n", $Mixed);
+      }
+      
+      return $Mixed;
    }
    
    protected static function LinksCallback($Matches) {
@@ -930,9 +956,10 @@ EOT;
          } else {
             require_once(PATH_LIBRARY.DS.'vendors'.DS.'markdown'.DS.'markdown.php');
             $Mixed = Markdown($Mixed);
+            $Mixed = $Formatter->Format($Mixed);
             $Mixed = Gdn_Format::Links($Mixed);
             $Mixed = Gdn_Format::Mentions($Mixed);
-            return $Formatter->Format($Mixed);
+            return $Mixed;
          }
       }
    }
