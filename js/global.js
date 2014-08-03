@@ -44,24 +44,20 @@ jQuery(document).ready(function($) {
 	gdn = { };
 	gdn.Libraries = {};
 
-   // Grab a definition from hidden inputs in the page
+   // Grab a definition from object in the page
    gdn.definition = function(definition, defaultVal, set) {
       if (defaultVal == null)
          defaultVal = definition;
-         
-      var $def = $('#Definitions #' + definition);
-      var def;
-      
-      if(set) {
-         $def.val(defaultVal);
-         def = defaultVal;
-      } else {
-         def = $def.val();
-         if ($def.length == 0)
-            def = defaultVal;
+
+      if(!(definition in definitions)) {
+         return defaultVal;
       }
-         
-      return def;
+
+      if(set) {
+         definitions[definition] = defaultVal;
+      }
+
+      return definitions[definition];
    }
    
    gdn.elementSupports = function(element, attribute) {
@@ -604,7 +600,7 @@ jQuery(document).ready(function($) {
 	// Pick up the inform message stack and display it on page load
 	var informMessageStack = gdn.definition('InformMessageStack', false);
 	if (informMessageStack) {
-		informMessageStack = {'InformMessages' : eval($.base64Decode(informMessageStack))};
+		informMessageStack = {'InformMessages' : $.parseJSON($.base64Decode(informMessageStack))};
 		gdn.inform(informMessageStack);
 	}
 	
