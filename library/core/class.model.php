@@ -339,7 +339,7 @@ class Gdn_Model extends Gdn_Pluggable {
             'DateUpdated' => 0, 'UpdateUserID' => 0, 'UpdateIPAddress' => 0));
       return $Data;
    }
-   
+
    /**
     * Returns an array with only those keys that are actually in the schema.
     *
