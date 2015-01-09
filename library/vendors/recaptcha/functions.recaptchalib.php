@@ -93,7 +93,7 @@ function recaptcha_get_html ($pubkey, $error = null)
             </div>
         </div>
     </noscript>
-+EOD;
+EOD;
 }
 
 
