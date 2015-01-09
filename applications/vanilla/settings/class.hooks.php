@@ -210,7 +210,7 @@ class VanillaHooks implements Gdn_IPlugin {
    public function Base_Render_Before($Sender) {
       $Session = Gdn::Session();
       if ($Sender->Menu)
-         $Sender->Menu->AddLink('Discussions', T('Discussions'), '/discussions', FALSE, array('Standard' => TRUE, 'class' => 'Discussions'));
+         $Sender->Menu->AddLink('Discussions', T('Discussions'), '/discussions', FALSE, array('Standard' => TRUE));
    }
    
    /**
