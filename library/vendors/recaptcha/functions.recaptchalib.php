@@ -35,8 +35,7 @@
 /**
  * The reCAPTCHA server URL's
  */
-define("RECAPTCHA_API_SERVER", "http://www.google.com/recaptcha/api");
-define("RECAPTCHA_API_SECURE_SERVER", "https://www.google.com/recaptcha/api");
+define("RECAPTCHA_API_SECURE_SERVER", "https://www.google.com/recaptcha");
 define("RECAPTCHA_VERIFY_SERVER", "www.google.com");
 
 /**
@@ -55,81 +54,47 @@ function _recaptcha_qsencode ($data) {
 }
 
 
-
-/**
- * Submits an HTTP POST to a reCAPTCHA server
- * @param string $host
- * @param string $path
- * @param array $data
- * @param int port
- * @return array response
- */
-function _recaptcha_http_post($host, $path, $data, $port = 80) {
-
-        $req = _recaptcha_qsencode ($data);
-
-        $http_request  = "POST $path HTTP/1.0\r\n";
-        $http_request .= "Host: $host\r\n";
-        $http_request .= "Content-Type: application/x-www-form-urlencoded;\r\n";
-        $http_request .= "Content-Length: " . strlen($req) . "\r\n";
-        $http_request .= "User-Agent: reCAPTCHA/PHP\r\n";
-        $http_request .= "\r\n";
-        $http_request .= $req;
-
-        $response = '';
-        if( false == ( $fs = @fsockopen($host, $port, $errno, $errstr, 10) ) ) {
-                die ('Could not open socket');
-        }
-
-        fwrite($fs, $http_request);
-
-        while ( !feof($fs) )
-                $response .= fgets($fs, 1160); // One TCP-IP packet
-        fclose($fs);
-        $response = explode("\r\n\r\n", $response, 2);
-
-        return $response;
-}
-
-
-
 /**
  * Gets the challenge HTML (javascript and non-javascript version).
  * This is called from the browser, and the resulting reCAPTCHA HTML widget
  * is embedded within the HTML form it was called from.
  * @param string $pubkey A public key for reCAPTCHA
  * @param string $error The error given by reCAPTCHA (optional, default is null)
- * @param boolean $use_ssl Should the request be made over ssl? (optional, default is false)
 
  * @return string - The HTML to be embedded in the user's form.
  */
-function recaptcha_get_html ($pubkey, $error = null, $use_ssl = false)
+function recaptcha_get_html ($pubkey, $error = null)
 {
 	if ($pubkey == null || $pubkey == '') {
 		echo (T('ToUseRecaptcha', "To use reCAPTCHA you must get an API key from <a href='https://www.google.com/recaptcha/admin/create'>https://www.google.com/recaptcha/admin/create</a>"));
       return;
    }
 	
-	if ($use_ssl) {
-                $server = RECAPTCHA_API_SECURE_SERVER;
-        } else {
-                $server = RECAPTCHA_API_SERVER;
-        }
+	$server = RECAPTCHA_API_SECURE_SERVER;
 
-        $errorpart = "";
-        if ($error) {
-           $errorpart = "&amp;error=" . $error;
-        }
-        return '<script type="text/javascript" src="'. $server . '/challenge?k=' . $pubkey . $errorpart . '"></script>
+    // New "no Captcha" reCaptcha
+    return <<<EOD
+    <form action="?" method="POST">
+          <div class="g-recaptcha" data-sitekey="$pubkey"></div>
+    </form>
+    <script type="text/javascript" src="$server/api.js"></script>
 
-	<noscript>
-  		<iframe src="'. $server . '/noscript?k=' . $pubkey . $errorpart . '" height="300" width="500" frameborder="0"></iframe><br/>
-  		<textarea name="recaptcha_challenge_field" rows="3" cols="40"></textarea>
-  		<input type="hidden" name="recaptcha_response_field" value="manual_challenge"/>
-	</noscript>';
+    <noscript>
+        <div style="width: 302px; height: 352px;">
+            <div style="width: 302px; height: 352px; position: relative;">
+              <div style="width: 302px; height: 352px; position: absolute;">
+                <iframe src="https://www.google.com/recaptcha/api/fallback?k=$pubkey" frameborder="0" scrolling="no" style="width: 302px; height:352px; border-style: none;"></iframe>
+              </div>
+
+              <div style="width: 250px; height: 80px; position: absolute; border-style: none; bottom: 21px; left: 25px; margin: 0px; padding: 0px; right: 25px;">
+                <textarea id="g-recaptcha-response" name="g-recaptcha-response" class="g-recaptcha-response" style="width: 250px; height: 80px; border: 1px solid #c1c1c1; margin: 0px; padding: 0px; resize: none;" value="">
+        </textarea>
+              </div>
+            </div>
+        </div>
+    </noscript>
++EOD;
 }
-
-
 
 
 /**
@@ -163,26 +128,20 @@ function recaptcha_check_answer ($privkey, $remoteip, $challenge, $response, $ex
 	
 	
         //discard spam submissions
-        if ($challenge == null || strlen($challenge) == 0 || $response == null || strlen($response) == 0) {
+        if ($response == null || strlen($response) == 0) {
                 $recaptcha_response = new ReCaptchaResponse();
                 $recaptcha_response->is_valid = false;
                 $recaptcha_response->error = 'incorrect-captcha-sol';
                 return $recaptcha_response;
         }
-
-        $response = _recaptcha_http_post (RECAPTCHA_VERIFY_SERVER, "/recaptcha/api/verify",
-                                          array (
-                                                 'privatekey' => $privkey,
-                                                 'remoteip' => $remoteip,
-                                                 'challenge' => $challenge,
-                                                 'response' => $response
-                                                 ) + $extra_params
-                                          );
-
-        $answers = explode ("\n", $response [1]);
+        
+        $verifyParams = array('secret'=> $privkey, 'remoteip'=> $remoteip, 'response'=> $response);
+        $verifyQuery = http_build_query($verifyParams);
+        $verifyURL = "https://www.google.com/recaptcha/api/siteverify?$verifyQuery";
+        $response = (file_get_contents($verifyURL));
+        $responseStruct = json_decode($response, true);
         $recaptcha_response = new ReCaptchaResponse();
-
-        if (trim ($answers [0]) == 'true') {
+        if ($responseStruct['success'] == 'true') {
                 $recaptcha_response->is_valid = true;
         }
         else {
@@ -190,7 +149,6 @@ function recaptcha_check_answer ($privkey, $remoteip, $challenge, $response, $ex
                 $recaptcha_response->error = $answers [1];
         }
         return $recaptcha_response;
-
 }
 
 /**
